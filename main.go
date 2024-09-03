@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -23,7 +25,7 @@ const (
 	done
 )
 const (
-	main status = iota
+	model status = iota
 	form
 )
 
@@ -53,6 +55,10 @@ func (t *Task) Next() {
 	} else {
 		t.status++
 	}
+}
+
+func NewTask(status status, title, description string) Task {
+	return Task{status: status, title: title, description: description}
 }
 
 // Model
@@ -104,9 +110,7 @@ func (m *Model) initLists(width, height int) {
 	// In Progress
 	m.lists[done].Title = "Done"
 	m.lists[done].SetItems([]list.Item{
-		Task{status: done, title: "SoW", description: "Write statement of work."},
-		Task{status: done, title: "Leverage Requirements", description: "Leverage project functional and non-functional requirements."},
-		Task{status: done, title: "Architectural Documentation", description: "Write documentation about the solution architecture."},
+		Task{status: done, title: "Project Idea", description: "zzzzz."},
 	})
 }
 
@@ -134,9 +138,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			m.MoveToNext()
+		case "n":
+			models[model] = m
+			models[form].(*Form).focused = m.focused
+			return models[form], nil
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		}
+	case Task:
+		task := msg
+		return m, m.lists[task.status].InsertItem(len(m.lists[task.status].Items()), task)
 	}
 
 	var cmd tea.Cmd
@@ -153,6 +164,60 @@ func (m *Model) View() string {
 	)
 }
 
+type Form struct {
+	focused     status
+	title       textinput.Model
+	description textarea.Model
+}
+
+func NewForm(focused status) *Form {
+	form := &Form{focused: focused}
+	form.title = textinput.New()
+	form.title.Focus()
+	form.description = textarea.New()
+	return form
+}
+
+func (f Form) CreateTaskFromForm(m *Model) tea.Msg {
+	m.lists[f.focused].InsertItem(len(m.lists[f.focused].Items()), NewTask(f.focused, f.title.Value(), f.description.Value()))
+	return NewTask(f.focused, f.title.Value(), f.description.Value())
+}
+
+func (f Form) Init() tea.Cmd {
+	return nil
+}
+
+func (f Form) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			if f.title.Focused() {
+				f.title.Blur()
+				f.description.Focus()
+				return f, textarea.Blink
+			} else {
+				models[form] = f
+				f.CreateTaskFromForm(models[model].(*Model))
+				models[form] = NewForm(f.focused)
+				return models[model], nil
+			}
+		}
+	}
+	if f.title.Focused() {
+		f.title, cmd = f.title.Update(msg)
+		return f, cmd
+	} else {
+		f.description, cmd = f.description.Update(msg)
+		return f, cmd
+	}
+}
+
+func (f Form) View() string {
+	return lipgloss.JoinVertical(lipgloss.Left, f.title.View(), f.description.View())
+}
+
 // Functions
 func getBoardStyle(m *Model, s status, listItem list.Model) string {
 	if s == m.focused {
@@ -163,8 +228,10 @@ func getBoardStyle(m *Model, s status, listItem list.Model) string {
 }
 
 func main() {
-	m := New()
+	models = []tea.Model{New(), NewForm(todo)}
+	m := models[model]
 	m.Init()
+
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
 		fmt.Println("Error starting program:", err)
