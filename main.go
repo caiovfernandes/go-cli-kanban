@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type status int
@@ -13,6 +14,8 @@ const (
 	inProgress
 	done
 )
+
+const boardDivisor = 4
 
 type Task struct {
 	status      status
@@ -33,47 +36,90 @@ func (t Task) Description() string {
 }
 
 type Model struct {
-	list list.Model
-	err  error
+	focused status
+	lists   []list.Model
+	err     error
 }
 
 func New() *Model {
 	return &Model{}
 }
 
-func (m *Model) initList(width, height int) {
-	m.list = list.New([]list.Item{}, list.NewDefaultDelegate(), width, height)
-	m.list.Title = "To Do"
-	m.list.SetItems([]list.Item{
+func (m *Model) initLists(width, height int) {
+	defaultList := list.New(
+		[]list.Item{},
+		list.NewDefaultDelegate(),
+		width/boardDivisor,
+		height,
+	)
+	m.lists = []list.Model{defaultList, defaultList, defaultList}
+
+	// To Do
+	m.lists[todo].Title = "To Do"
+	m.lists[todo].SetItems([]list.Item{
 		Task{status: todo, title: "Write documentation", description: "Write documentation for the project"},
 		Task{status: todo, title: "Write tests", description: "Write tests for the project"},
 		Task{status: todo, title: "Write code", description: "Write code for the project"},
 	})
+
+	// In Progress
+	m.lists[inProgress].Title = "In Progress"
+	m.lists[inProgress].SetItems([]list.Item{
+		Task{status: inProgress, title: "SoW", description: "Write statement of work."},
+		Task{status: inProgress, title: "Leverage Requirements", description: "Leverage project functional and non-functional requirements."},
+		Task{status: inProgress, title: "Architectural Documentation", description: "Write documentation about the solution architecture."},
+	})
+
+	// In Progress
+	m.lists[done].Title = "Done"
+	m.lists[done].SetItems([]list.Item{
+		Task{status: done, title: "SoW", description: "Write statement of work."},
+		Task{status: done, title: "Leverage Requirements", description: "Leverage project functional and non-functional requirements."},
+		Task{status: done, title: "Architectural Documentation", description: "Write documentation about the solution architecture."},
+	})
 }
 
 func (m *Model) Init() tea.Cmd {
+	m.focused = 0
+	m.lists = make([]list.Model, 3)
 	return nil
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.initList(msg.Width, msg.Height)
+		m.initLists(msg.Width, msg.Height)
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "h", "left":
+			if m.focused > todo {
+				m.focused--
+			}
+		case "l", "right":
+			if m.focused < done {
+				m.focused++
+			}
+		}
 	}
 
 	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
+	m.lists[m.focused], cmd = m.lists[m.focused].Update(msg)
 	return m, cmd
 }
 
 func (m *Model) View() string {
-	return m.list.View()
+	return lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		m.lists[todo].View(),
+		m.lists[inProgress].View(),
+		m.lists[done].View(),
+	)
 }
 
 func main() {
 	m := New()
 	p := tea.NewProgram(m)
-	if err := p.Start(); err != nil {
+	if _, err := p.Run(); err != nil {
 		fmt.Println("Error starting program:", err)
 		panic(err)
 	}
