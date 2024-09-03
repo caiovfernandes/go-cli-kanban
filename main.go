@@ -9,6 +9,12 @@ import (
 
 type status int
 
+var (
+	columnStyle  = lipgloss.NewStyle().Padding(1, 2)
+	focusedStyle = lipgloss.NewStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#FF00FF"))
+	helpStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+)
+
 const (
 	todo status = iota
 	inProgress
@@ -49,9 +55,10 @@ func (m *Model) initLists(width, height int) {
 	defaultList := list.New(
 		[]list.Item{},
 		list.NewDefaultDelegate(),
-		width/boardDivisor,
-		height,
+		width,
+		height-5,
 	)
+	defaultList.SetShowHelp(false)
 	m.lists = []list.Model{defaultList, defaultList, defaultList}
 
 	// To Do
@@ -88,6 +95,8 @@ func (m *Model) Init() tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		columnStyle.Width(msg.Width)
+		focusedStyle.Width(msg.Width)
 		m.initLists(msg.Width, msg.Height)
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -99,6 +108,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focused < done {
 				m.focused++
 			}
+		case "ctrl+c", "q":
+			return m, tea.Quit
 		}
 	}
 
@@ -110,14 +121,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) View() string {
 	return lipgloss.JoinHorizontal(
 		lipgloss.Left,
-		m.lists[todo].View(),
-		m.lists[inProgress].View(),
-		m.lists[done].View(),
+		getBoardStyle(m, todo, m.lists[todo]),
+		getBoardStyle(m, inProgress, m.lists[inProgress]),
+		getBoardStyle(m, done, m.lists[done]),
 	)
+}
+
+func getBoardStyle(m *Model, s status, listItem list.Model) string {
+	if s == m.focused {
+		return focusedStyle.Render(listItem.View())
+	} else {
+		return columnStyle.Render(listItem.View())
+	}
 }
 
 func main() {
 	m := New()
+	m.Init()
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
 		fmt.Println("Error starting program:", err)
