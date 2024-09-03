@@ -14,7 +14,6 @@ type status int
 var (
 	columnStyle  = lipgloss.NewStyle().Padding(1, 2)
 	focusedStyle = lipgloss.NewStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#FF00FF"))
-	helpStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 
 	models []tea.Model
 )
