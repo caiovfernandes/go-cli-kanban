@@ -13,6 +13,8 @@ var (
 	columnStyle  = lipgloss.NewStyle().Padding(1, 2)
 	focusedStyle = lipgloss.NewStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#FF00FF"))
 	helpStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+
+	models []tea.Model
 )
 
 const (
@@ -20,8 +22,12 @@ const (
 	inProgress
 	done
 )
+const (
+	main status = iota
+	form
+)
 
-const boardDivisor = 4
+// Task
 
 type Task struct {
 	status      status
@@ -41,6 +47,16 @@ func (t Task) Description() string {
 	return t.description
 }
 
+func (t *Task) Next() {
+	if t.status == done {
+		t.status = todo
+	} else {
+		t.status++
+	}
+}
+
+// Model
+
 type Model struct {
 	focused status
 	lists   []list.Model
@@ -49,6 +65,14 @@ type Model struct {
 
 func New() *Model {
 	return &Model{}
+}
+
+func (m *Model) MoveToNext() {
+	selectedItem := m.lists[m.focused].SelectedItem()
+	selectedTask := selectedItem.(Task)
+	m.lists[selectedTask.status].RemoveItem(m.lists[m.focused].Index())
+	selectedTask.Next()
+	m.lists[selectedTask.status].InsertItem(len(m.lists[selectedTask.status].Items())-1, selectedTask)
 }
 
 func (m *Model) initLists(width, height int) {
@@ -108,6 +132,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focused < done {
 				m.focused++
 			}
+		case "enter":
+			m.MoveToNext()
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		}
@@ -127,6 +153,7 @@ func (m *Model) View() string {
 	)
 }
 
+// Functions
 func getBoardStyle(m *Model, s status, listItem list.Model) string {
 	if s == m.focused {
 		return focusedStyle.Render(listItem.View())
